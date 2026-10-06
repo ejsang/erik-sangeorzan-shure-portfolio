@@ -1,0 +1,50 @@
+name: Deploy Shure portfolio to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'ejsang/erik-sangeorzan-shure-portfolio' && github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check exact public file allowlist
+        shell: python
+        run: |
+          from pathlib import Path
+          root = Path('public')
+          expected = {
+              'index.html', 'android-audio.html', 'cpp-systems.html',
+              'harman-validation.html', 'embedded-dsp.html', 'about.html',
+              'assets/site.css', 'assets/site.js',
+              'documents/Erik_Sangeorzan_Shure_4874_Resume.pdf',
+          }
+          entries = list(root.rglob('*'))
+          assert not any(p.is_symlink() for p in entries), 'Symlinks are not allowed'
+          actual = {p.relative_to(root).as_posix() for p in entries if p.is_file()}
+          assert actual == expected, f'Unexpected or missing files: {actual ^ expected}'
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload only reviewed public files
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./public
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
